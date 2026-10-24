@@ -1,23 +1,20 @@
-const CONTRACT_ADDRESS = "0x5FbDB2315678afecb367f032d93F642f64180aa3";
+
+const API = {
+  register: "/.netlify/functions/register-batch",
+  transfer: "/.netlify/functions/record-transfer"
+};
+
+const SEPOLIA_CHAIN_ID = 11155111;
 
 const connectButton = document.querySelector("#connectButton");
 const walletStatus = document.querySelector("#walletStatus");
 const notice = document.querySelector("#notice");
 const batchResult = document.querySelector("#batchResult");
 
-let provider;
-let signer;
-let contract;
-let contractAbi;
-
 function showNotice(message, type = "info") {
   notice.textContent = message;
   notice.className = `notice ${type}`;
   notice.hidden = false;
-}
-
-function shortAddress(address) {
-  return `${address.slice(0, 6)}…${address.slice(-4)}`;
 }
 
 function escapeHtml(value) {
@@ -32,90 +29,112 @@ function escapeHtml(value) {
 
 function readableError(error) {
   const message =
-    error?.shortMessage ||
-    error?.reason ||
-    error?.info?.error?.message ||
     error?.message ||
-    "An unknown error occurred.";
+    "An unexpected error occurred.";
 
-  if (message.includes("Batch already exists")) {
+  if (/failed to fetch|networkerror|load failed/i.test(message)) {
+    return "Could not reach the Netlify function. Check the deployment and try again.";
+  }
+
+  if (/batch already exists/i.test(message)) {
     return "That batch ID already exists. Choose a unique ID.";
   }
-  if (message.includes("Batch does not exist")) {
-    return "No batch with that ID was found on this blockchain.";
-  }
-  if (message.includes("Not an authorized recorder")) {
-    return "This local account is not authorized to record updates.";
-  }
-  if (message.includes("Only owner")) {
-    return "Only the contract owner can perform that action.";
-  }
-  if (/fetch|networkerror|econnrefused/i.test(message)) {
-    return "Cannot reach Hardhat. Check that the local blockchain is running.";
+
+  if (/batch does not exist/i.test(message)) {
+    return "That batch was not found. Check the batch ID.";
   }
 
-  return message.length > 220 ? `${message.slice(0, 220)}…` : message;
+  if (/not an authorized recorder/i.test(message)) {
+    return "The backend wallet is not authorized to record updates.";
+  }
+
+  if (/insufficient funds/i.test(message)) {
+    return "The backend wallet may need more Sepolia test ETH.";
+  }
+
+  return message.length > 240
+    ? `${message.slice(0, 240)}…`
+    : message;
 }
 
-async function connectWallet() {
+function getExplorerUrl(hash) {
+  return `https://sepolia.etherscan.io/tx/${encodeURIComponent(hash)}`;
+}
+
+function renderTransactionResult(message, hash) {
+  batchResult.hidden = false;
+
+  const link = hash
+    ? `<p><a href="${getExplorerUrl(hash)}" target="_blank" rel="noopener noreferrer">View transaction on Sepolia Etherscan ↗</a></p>`
+    : "";
+
+  batchResult.innerHTML = `
+    <div class="result-top">
+      <div>
+        <div class="result-kicker">TRANSACTION STATUS</div>
+        <h3>${escapeHtml(message)}</h3>
+      </div>
+      <span class="status-chip">Sepolia</span>
+    </div>
+    ${link}
+    <p class="empty-history">
+      This confirms the function returned successfully. Open the transaction
+      link to inspect its on-chain status and receipt.
+    </p>
+  `;
+}
+
+async function postJson(url, payload) {
+  const response = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(payload)
+  });
+
+  const raw = await response.text();
+
+  let result;
   try {
-    const response = await fetch("./TraceLayer.json");
-    if (!response.ok) {
-      throw new Error("Could not load frontend/TraceLayer.json.");
-    }
-
-    const artifact = await response.json();
-    contractAbi = artifact.abi;
-
-    // Connect directly to the local Hardhat JSON-RPC server.
-    provider = new ethers.JsonRpcProvider("http://127.0.0.1:8545");
-
-    const network = await provider.getNetwork();
-    if (network.chainId !== 31337n) {
-      throw new Error(`Expected chain ID 31337, received ${network.chainId}.`);
-    }
-
-    const code = await provider.getCode(CONTRACT_ADDRESS);
-    if (code === "0x") {
-      throw new Error(
-        "TraceLayer is not deployed at the configured address. Redeploy the contract and update CONTRACT_ADDRESS if needed."
-      );
-    }
-
-    // Hardhat's first account is for local development only.
-    signer = await provider.getSigner(0);
-    contract = new ethers.Contract(CONTRACT_ADDRESS, contractAbi, signer);
-
-    const address = await signer.getAddress();
-    walletStatus.textContent = `Local test account: ${shortAddress(address)}`;
-    connectButton.textContent = "Connected to Hardhat";
-
-    showNotice(
-      "Connected to the local blockchain. No MetaMask connection is required.",
-      "success"
+    result = raw ? JSON.parse(raw) : {};
+  } catch {
+    throw new Error(
+      `The server returned an unexpected response (HTTP ${response.status}).`
     );
-  } catch (error) {
-    contract = null;
-    signer = null;
-    showNotice(readableError(error), "error");
   }
+
+  if (!response.ok) {
+    throw new Error(
+      result.error ||
+      result.message ||
+      `Request failed with HTTP ${response.status}.`
+    );
+  }
+
+  if (result.success === false || result.error) {
+    throw new Error(result.error || result.message);
+  }
+
+  return result;
 }
 
-async function requireContract() {
-  if (!contract || !signer) {
-    await connectWallet();
-  }
-  if (!contract || !signer) {
-    throw new Error("Could not connect to the local blockchain.");
-  }
-  return contract;
+function getTransactionHash(result) {
+  return (
+    result.transactionHash ||
+    result.txHash ||
+    result.hash ||
+    result.transaction?.hash ||
+    null
+  );
 }
 
 async function withButtonBusy(form, callback) {
   const button = form.querySelector('button[type="submit"]');
   const originalText = button.textContent;
+
   button.disabled = true;
-  button.textContent = "Processing…";
+  button.textContent = "Submitting…";
 
   try {
     await callback();
@@ -127,140 +146,135 @@ async function withButtonBusy(form, callback) {
   }
 }
 
-document.querySelector("#registerForm").addEventListener("submit", async (event) => {
-  event.preventDefault();
-  const form = event.currentTarget;
-  const data = new FormData(form);
+// Backend-mediated writes do not require a browser wallet connection.
+connectButton.textContent = "Backend mode";
+walletStatus.textContent = "Writes use the server wallet";
 
-  await withButtonBusy(form, async () => {
-    const app = await requireContract();
-
-    const batchId = data.get("batchId").trim();
-    const tx = await app.registerBatch(
-      batchId,
-      data.get("productName").trim(),
-      data.get("origin").trim()
-    );
-
-    showNotice(`Registration submitted: ${tx.hash}. Waiting for confirmation…`);
-    await tx.wait();
-
-    document.querySelector("#lookupBatchId").value = batchId;
-    form.reset();
-    showNotice(`Batch registered successfully. Transaction: ${tx.hash}`, "success");
-    await lookupBatch(batchId);
-  });
+connectButton.addEventListener("click", () => {
+  showNotice(
+    "Tracknyll submits writes through its Netlify backend. A browser wallet connection is not required for these operations.",
+    "info"
+  );
 });
 
-document.querySelector("#transferForm").addEventListener("submit", async (event) => {
-  event.preventDefault();
-  const form = event.currentTarget;
-  const data = new FormData(form);
+// Register a batch.
+document
+  .querySelector("#registerForm")
+  .addEventListener("submit", async (event) => {
+    event.preventDefault();
 
-  await withButtonBusy(form, async () => {
-    const app = await requireContract();
-    const batchId = data.get("transferBatchId").trim();
+    const form = event.currentTarget;
+    const data = new FormData(form);
 
-    const tx = await app.recordTransfer(
-      batchId,
-      data.get("destination").trim(),
-      data.get("transferStatus")
-    );
+    const payload = {
+      batchId: String(data.get("batchId") || "").trim(),
+      productName: String(data.get("productName") || "").trim(),
+      origin: String(data.get("origin") || "").trim()
+    };
 
-    showNotice(`Handoff submitted: ${tx.hash}. Waiting for confirmation…`);
-    await tx.wait();
+    if (!payload.batchId || !payload.productName || !payload.origin) {
+      showNotice("Complete all registration fields.", "error");
+      return;
+    }
 
-    document.querySelector("#lookupBatchId").value = batchId;
-    form.reset();
-    showNotice(`Handoff recorded successfully. Transaction: ${tx.hash}`, "success");
-    await lookupBatch(batchId);
+    await withButtonBusy(form, async () => {
+      showNotice("Submitting batch registration to Sepolia…");
+
+      const result = await postJson(API.register, payload);
+      const hash = getTransactionHash(result);
+
+      document.querySelector("#lookupBatchId").value = payload.batchId;
+      form.reset();
+
+      renderTransactionResult(
+        hash ? "Registration submitted" : "Registration request accepted",
+        hash
+      );
+
+      showNotice(
+        hash
+          ? "The registration request was accepted. Check its transaction receipt for confirmation."
+          : "The server accepted the request, but did not return a recognizable transaction hash.",
+        hash ? "success" : "info"
+      );
+    });
   });
-});
 
-document.querySelector("#trackForm").addEventListener("submit", async (event) => {
-  event.preventDefault();
-  const form = event.currentTarget;
-  const batchId = new FormData(form).get("lookupBatchId").trim();
+// Record a handoff.
+document
+  .querySelector("#transferForm")
+  .addEventListener("submit", async (event) => {
+    event.preventDefault();
 
-  await withButtonBusy(form, async () => {
-    await requireContract();
-    await lookupBatch(batchId);
+    const form = event.currentTarget;
+    const data = new FormData(form);
+
+    const payload = {
+      batchId: String(data.get("transferBatchId") || "").trim(),
+      toLocation: String(data.get("destination") || "").trim(),
+      status: String(data.get("transferStatus") || "").trim()
+    };
+
+    if (!payload.batchId || !payload.toLocation || !payload.status) {
+      showNotice("Complete all handoff fields.", "error");
+      return;
+    }
+
+    await withButtonBusy(form, async () => {
+      showNotice("Submitting handoff to Sepolia…");
+
+      const result = await postJson(API.transfer, payload);
+      const hash = getTransactionHash(result);
+
+      document.querySelector("#lookupBatchId").value = payload.batchId;
+      form.reset();
+
+      renderTransactionResult(
+        hash ? "Handoff submitted" : "Handoff request accepted",
+        hash
+      );
+
+      showNotice(
+        hash
+          ? "The handoff request was accepted. Check its transaction receipt for confirmation."
+          : "The server accepted the request, but did not return a recognizable transaction hash.",
+        hash ? "success" : "info"
+      );
+    });
   });
-});
 
-async function lookupBatch(batchId) {
-  if (!contract) {
-    throw new Error("Connect to Hardhat first.");
-  }
+// Tracking requires a read endpoint. The current backend only provides writes.
+document
+  .querySelector("#trackForm")
+  .addEventListener("submit", async (event) => {
+    event.preventDefault();
 
-  batchResult.hidden = false;
-  batchResult.innerHTML = '<p class="empty-history">Loading batch history…</p>';
+    const batchId = String(
+      new FormData(event.currentTarget).get("lookupBatchId") || ""
+    ).trim();
 
-  try {
-    const [batch, transfers] = await Promise.all([
-      contract.getBatch(batchId),
-      contract.getTransferHistory(batchId)
-    ]);
+    if (!batchId) {
+      showNotice("Enter a batch ID to track.", "error");
+      return;
+    }
 
-    const createdAt = new Date(Number(batch.createdAt) * 1000);
-
-    const historyItems = transfers.map((transfer) => {
-      const time = new Date(Number(transfer.timestamp) * 1000);
-      return `
-        <article class="history-item">
-          <div class="history-marker"></div>
-          <div>
-            <div class="history-route">${escapeHtml(transfer.fromLocation)} → ${escapeHtml(transfer.toLocation)}</div>
-            <div class="history-meta">${escapeHtml(transfer.status)} · ${escapeHtml(time.toLocaleString())}</div>
-            <div class="history-meta">Recorded by ${escapeHtml(transfer.recordedBy)}</div>
-          </div>
-        </article>`;
-    }).join("");
-
+    batchResult.hidden = false;
     batchResult.innerHTML = `
       <div class="result-top">
         <div>
-          <div class="result-kicker">TRACE RESULT</div>
-          <h3>${escapeHtml(batch.productName)}</h3>
-          <div class="result-id">BATCH / ${escapeHtml(batchId)}</div>
-        </div>
-        <span class="status-chip">${escapeHtml(batch.status)}</span>
-      </div>
-      <div class="details-grid">
-        <div class="detail-cell">
-          <span class="detail-label">Origin</span>
-          <span class="detail-value">${escapeHtml(batch.origin)}</span>
-        </div>
-        <div class="detail-cell">
-          <span class="detail-label">Current location</span>
-          <span class="detail-value">${escapeHtml(batch.currentLocation)}</span>
-        </div>
-        <div class="detail-cell">
-          <span class="detail-label">Registered</span>
-          <span class="detail-value">${escapeHtml(createdAt.toLocaleString())}</span>
+          <div class="result-kicker">TRACKING NOT CONFIGURED</div>
+          <h3>${escapeHtml(batchId)}</h3>
         </div>
       </div>
-      <div class="history-heading">
-        <h4>Journey history</h4>
-        <span>${transfers.length} TRANSFER${transfers.length === 1 ? "" : "S"}</span>
-      </div>
-      <div class="history-list">
-        <article class="history-item">
-          <div class="history-marker"></div>
-          <div>
-            <div class="history-route">${escapeHtml(batch.origin)} · Batch registered</div>
-            <div class="history-meta">${escapeHtml(createdAt.toLocaleString())}</div>
-          </div>
-        </article>
-        ${historyItems || '<p class="empty-history">No transfers have been recorded for this batch yet.</p>'}
-      </div>`;
+      <p class="empty-history">
+        The frontend is connected to the Netlify backend, but a read endpoint
+        for retrieving batch details and journey history has not been configured.
+        No tracking history can be displayed yet.
+      </p>
+    `;
 
-    showNotice(`Loaded batch ${batchId} from the local blockchain.`, "success");
-  } catch (error) {
-    batchResult.hidden = true;
-    throw error;
-  }
-}
-
-connectButton.addEventListener("click", connectWallet);
-
+    showNotice(
+      "Batch lookup needs a read-only backend function. Registration and handoff use separate endpoints.",
+      "info"
+    );
+  });
