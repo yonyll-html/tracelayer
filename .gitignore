@@ -1,0 +1,47 @@
+# Dependencies
+/node_modules/
+
+# Build and test output
+/artifacts/
+/cache/
+/coverage/
+/types/
+/dist/
+/bundle/
+/out/
+
+# Environment variables and secrets
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+# Local editor and operating system files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Local blockchain data
+/hardhat-node/
+/chain-data/
+
+# Gas snapshots
+/.gas-snapshot
+/snapshots/
+
+# Local AI/editor configuration
+/.agents/
+/.claude
+/AGENTS.md
+/CLAUDE.md
+
+# Local Hardhat deployment records
+/ignition/deployments/
