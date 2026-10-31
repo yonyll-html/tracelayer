@@ -1,9 +1,8 @@
-
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.28;
 
 /// @title TraceLayer
-/// @notice Educational supply-chain traceability demo.
+/// @notice Educational supply-chain traceability prototype.
 contract TraceLayer {
     address public owner;
     address public relayer;
@@ -74,6 +73,17 @@ contract TraceLayer {
         emit RelayerChanged(previousRelayer, newRelayer);
     }
 
+    function isAllowedOrganization(
+        string memory organizationId
+    ) public pure returns (bool) {
+        bytes32 organizationHash = keccak256(bytes(organizationId));
+
+        return
+            organizationHash == keccak256(bytes("green-valley-farms")) ||
+            organizationHash == keccak256(bytes("freshroute-distribution")) ||
+            organizationHash == keccak256(bytes("harvest-market"));
+    }
+
     function registerBatch(
         string calldata batchId,
         string calldata productName,
@@ -84,6 +94,7 @@ contract TraceLayer {
         require(bytes(productName).length > 0, "Product name required");
         require(bytes(origin).length > 0, "Origin required");
         require(bytes(custodianId).length > 0, "Custodian ID required");
+        require(isAllowedOrganization(custodianId), "Unrecognized custodian");
         require(!batches[batchId].exists, "Batch already exists");
 
         batches[batchId] = Batch({
@@ -119,6 +130,16 @@ contract TraceLayer {
         require(bytes(toLocation).length > 0, "Destination required");
         require(bytes(status).length > 0, "Status required");
         require(bytes(newCustodian).length > 0, "New custodian required");
+
+        require(
+            isAllowedOrganization(currentCustodian),
+            "Unrecognized current custodian"
+        );
+
+        require(
+            isAllowedOrganization(newCustodian),
+            "Unrecognized new custodian"
+        );
 
         Batch storage batch = batches[batchId];
 

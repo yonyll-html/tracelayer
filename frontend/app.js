@@ -1,7 +1,12 @@
-
-const CONTRACT_ADDRESS = "0x963e99e283245fA2BD5538b42a53Ae552F3711c4";
+const CONTRACT_ADDRESS = "0x8e1cb0586cCeFdD987eccb8F0195dE2474809370";
 const SEPOLIA_CHAIN_ID = 11155111n;
 const SEPOLIA_RPC_URL = "https://ethereum-sepolia-rpc.publicnode.com";
+
+const ORGANIZATION_NAMES = {
+  "green-valley-farms": "Green Valley Farms",
+  "freshroute-distribution": "FreshRoute Distribution",
+  "harvest-market": "Harvest Market"
+};
 
 const walletStatus = document.querySelector("#walletStatus");
 const notice = document.querySelector("#notice");
@@ -13,6 +18,10 @@ const trackForm = document.querySelector("#trackForm");
 let readProvider;
 let readContract;
 let contractAbi;
+
+function organizationName(organizationId) {
+  return ORGANIZATION_NAMES[organizationId] || organizationId;
+}
 
 function showNotice(message, type = "info") {
   notice.textContent = message;
@@ -53,10 +62,10 @@ async function initializeReadAccess() {
     if (!ethers.isAddress(CONTRACT_ADDRESS)) {
       readContract = null;
       walletStatus.textContent =
-        "Public demo · Shared backend wallet · Awaiting deployment";
+        "Sepolia testnet · Contract unavailable";
 
       showNotice(
-        "The public demo interface is ready. Blockchain lookup will become available after the new contract is deployed.",
+        "The Tracknyll interface is ready. Blockchain lookup will become available after the new contract is deployed.",
         "info"
       );
       return;
@@ -91,7 +100,7 @@ async function initializeReadAccess() {
     );
 
     walletStatus.textContent =
-      "Public demo · Shared backend wallet · Sepolia connected";
+      "Sepolia testnet · Connected";
 
     showNotice(
       "Connected to the Tracknyll contract on Sepolia.",
@@ -99,7 +108,7 @@ async function initializeReadAccess() {
     );
   } catch (error) {
     readContract = null;
-    walletStatus.textContent = "Public demo · Blockchain connection unavailable";
+    walletStatus.textContent = "Sepolia testnet · Connection unavailable";
     showNotice(readableError(error), "error");
   }
 }
@@ -167,7 +176,7 @@ registerForm.addEventListener("submit", async (event) => {
     form.reset();
 
     showNotice(
-      `Batch registered. Transaction: ${result.transactionHash}`,
+      `Batch registered under ${organizationName(result.organizationId)}. Transaction: ${result.transactionHash}`,
       "success"
     );
 
@@ -189,8 +198,7 @@ transferForm.addEventListener("submit", async (event) => {
       batchId: data.get("transferBatchId").trim(),
       destination: data.get("destination").trim(),
       status: data.get("transferStatus"),
-      newCustodian: data.get("newCustodian").trim(),
-      organizationCode: data.get("organizationCode").trim()
+      newCustodian: data.get("newCustodian").trim()
     };
 
     showNotice("Submitting custody handoff through the shared wallet…");
@@ -201,7 +209,7 @@ transferForm.addEventListener("submit", async (event) => {
     form.reset();
 
     showNotice(
-      `Handoff recorded. New custodian: ${result.toOrganization}. Transaction: ${result.transactionHash}`,
+      `Handoff recorded. New custodian: ${organizationName(result.toOrganization)}. Transaction: ${result.transactionHash}`,
       "success"
     );
 
@@ -264,8 +272,8 @@ async function lookupBatch(batchId) {
               Recorded by: Shared Tracknyll wallet
             </div>
             <div class="history-meta">
-              Custody: ${escapeHtml(transfer.fromCustodian)}
-              → ${escapeHtml(transfer.toCustodian)}
+              Custody: ${escapeHtml(organizationName(transfer.fromCustodian))}
+              → ${escapeHtml(organizationName(transfer.toCustodian))}
             </div>
           </div>
         </article>`;
@@ -294,7 +302,7 @@ async function lookupBatch(batchId) {
 
         <div class="detail-cell">
           <span class="detail-label">Current custodian</span>
-          <span class="detail-value">${escapeHtml(batch.currentCustodian)}</span>
+          <span class="detail-value">${escapeHtml(organizationName(batch.currentCustodian))}</span>
         </div>
 
         <div class="detail-cell">
@@ -323,6 +331,13 @@ async function lookupBatch(batchId) {
             <div class="history-meta">
               ${escapeHtml(createdAt.toLocaleString())}
             </div>
+            <div class="history-meta">
+              Initial custodian: ${escapeHtml(organizationName(
+                transfers.length > 0
+                  ? transfers[0].fromCustodian
+                  : batch.currentCustodian
+              ))}
+            </div>
           </div>
         </article>
 
@@ -342,7 +357,7 @@ async function lookupBatch(batchId) {
 // INITIALIZE THE APPLICATION
 async function initializeApp() {
   walletStatus.textContent =
-    "Public demo · Shared backend wallet · Connecting…";
+    "Sepolia testnet · Connecting…";
 
   await initializeReadAccess();
 }

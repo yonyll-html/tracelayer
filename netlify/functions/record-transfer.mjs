@@ -4,8 +4,8 @@ import {
   validateText,
   validateRequest,
   getWriteContract,
-  getOrganizationForCode,
   isAllowedOrganization,
+  isAllowedDestinationOrganization,
   ALLOWED_STATUSES
 } from "./_shared.mjs";
 
@@ -24,26 +24,12 @@ export default async function handler(request, context, dependencies = {}) {
       "New custodian organization",
       80
     );
-    const organizationCode = validateText(
-      body.organizationCode,
-      "Organization access code",
-      100
-    );
 
     if (!ALLOWED_STATUSES.has(status)) {
       return json(400, { error: "Choose a valid handoff status." });
     }
 
-    const authorizedOrganization =
-      getOrganizationForCode(organizationCode);
-
-    if (!authorizedOrganization) {
-      return json(401, {
-        error: "Invalid organization access code."
-      });
-    }
-
-    if (!isAllowedOrganization(newCustodian)) {
+    if (!isAllowedDestinationOrganization(newCustodian)) {
       return json(400, {
         error: "Choose a recognized destination organization."
       });
@@ -60,13 +46,15 @@ export default async function handler(request, context, dependencies = {}) {
       });
     }
 
-    if (authorizedOrganization !== batch.currentCustodian) {
-      return json(403, {
-        error: "This access code is not authorized to transfer this batch."
+    const currentCustodian = batch.currentCustodian;
+
+    if (!isAllowedOrganization(currentCustodian)) {
+      return json(409, {
+        error: "The batch has an unrecognized current custodian."
       });
     }
 
-    if (newCustodian === batch.currentCustodian) {
+    if (newCustodian === currentCustodian) {
       return json(400, {
         error: "The new custodian must be different from the current custodian."
       });
@@ -76,8 +64,8 @@ export default async function handler(request, context, dependencies = {}) {
 
     const tx = await contract.recordTransfer(
       batchId,
-      authorizedOrganization,
-      batch.currentCustodian,
+      "guest",
+      currentCustodian,
       destination,
       status,
       newCustodian,
@@ -90,7 +78,7 @@ export default async function handler(request, context, dependencies = {}) {
       success: true,
       message: "Handoff recorded on Sepolia.",
       batchId,
-      fromOrganization: batch.currentCustodian,
+      fromOrganization: currentCustodian,
       toOrganization: newCustodian,
       transactionHash: tx.hash,
       blockNumber: receipt.blockNumber
