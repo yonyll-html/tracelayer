@@ -49,3 +49,6 @@ Thumbs.db
 # Temporary backups
 *.bak
 *.step7-backup
+
+# Local Netlify folder
+.netlify

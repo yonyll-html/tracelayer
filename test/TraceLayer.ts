@@ -1,31 +1,30 @@
-
 import { expect } from "chai";
 import { network } from "hardhat";
 
 const { ethers } = await network.create();
 
+const FARM = "green-valley-farms";
+const DISTRIBUTOR = "freshroute-distribution";
+const RETAILER = "harvest-market";
+
+const FARM_NAME = "Green Valley Farms";
+const DISTRIBUTOR_NAME = "FreshRoute Distribution";
+const RETAILER_NAME = "Harvest Market";
+
 describe("TraceLayer", function () {
   async function deployTraceLayer() {
     const traceLayer = await ethers.deployContract("TraceLayer");
-    const [owner, recorder, stranger, warehouseB, warehouseC] =
-      await ethers.getSigners();
+    const [owner, recorder, stranger] = await ethers.getSigners();
 
-    return {
-      traceLayer,
-      owner,
-      recorder,
-      stranger,
-      warehouseB,
-      warehouseC
-    };
+    return { traceLayer, owner, recorder, stranger };
   }
 
   async function registerCoffeeBatch(traceLayer: any, batchId: string) {
     await traceLayer.registerBatch(
       batchId,
       "Coffee Beans",
-      "Farm A",
-      "farm-a"
+      FARM_NAME,
+      FARM
     );
   }
 
@@ -50,6 +49,22 @@ describe("TraceLayer", function () {
     );
   }
 
+  it("recognizes the three configured organizations", async function () {
+    const { traceLayer } = await deployTraceLayer();
+
+    expect(await traceLayer.isAllowedOrganization(FARM)).to.equal(true);
+    expect(await traceLayer.isAllowedOrganization(DISTRIBUTOR)).to.equal(true);
+    expect(await traceLayer.isAllowedOrganization(RETAILER)).to.equal(true);
+  });
+
+  it("rejects unrecognized organization IDs", async function () {
+    const { traceLayer } = await deployTraceLayer();
+
+    expect(await traceLayer.isAllowedOrganization("farm-a")).to.equal(false);
+    expect(await traceLayer.isAllowedOrganization("warehouse-b")).to.equal(false);
+    expect(await traceLayer.isAllowedOrganization("unknown-org")).to.equal(false);
+  });
+
   it("registers a batch and stores its details", async function () {
     const { traceLayer } = await deployTraceLayer();
 
@@ -57,25 +72,20 @@ describe("TraceLayer", function () {
       traceLayer.registerBatch(
         "COFFEE-001",
         "Coffee Beans",
-        "Farm A",
-        "farm-a"
+        FARM_NAME,
+        FARM
       )
     )
       .to.emit(traceLayer, "BatchRegistered")
-      .withArgs(
-        "COFFEE-001",
-        "Coffee Beans",
-        "Farm A",
-        "farm-a"
-      );
+      .withArgs("COFFEE-001", "Coffee Beans", FARM_NAME, FARM);
 
     const batch = await traceLayer.getBatch("COFFEE-001");
 
     expect(batch.productName).to.equal("Coffee Beans");
-    expect(batch.origin).to.equal("Farm A");
-    expect(batch.currentLocation).to.equal("Farm A");
+    expect(batch.origin).to.equal(FARM_NAME);
+    expect(batch.currentLocation).to.equal(FARM_NAME);
     expect(batch.status).to.equal("Registered");
-    expect(batch.currentCustodian).to.equal("farm-a");
+    expect(batch.currentCustodian).to.equal(FARM);
     expect(batch.exists).to.equal(true);
   });
 
@@ -89,10 +99,10 @@ describe("TraceLayer", function () {
         traceLayer,
         "COFFEE-002",
         "operator-1",
-        "farm-a",
-        "Warehouse B",
+        FARM,
+        DISTRIBUTOR_NAME,
         "In transit",
-        "warehouse-b",
+        DISTRIBUTOR,
         0n
       )
     ).to.emit(traceLayer, "TransferRecorded");
@@ -101,35 +111,35 @@ describe("TraceLayer", function () {
       traceLayer,
       "COFFEE-002",
       "operator-2",
-      "warehouse-b",
-      "Port C",
-      "Exported",
-      "port-c",
+      DISTRIBUTOR,
+      RETAILER_NAME,
+      "Delivered",
+      RETAILER,
       1n
     );
 
     const batch = await traceLayer.getBatch("COFFEE-002");
     const history = await traceLayer.getTransferHistory("COFFEE-002");
 
-    expect(batch.currentLocation).to.equal("Port C");
-    expect(batch.status).to.equal("Exported");
-    expect(batch.currentCustodian).to.equal("port-c");
+    expect(batch.currentLocation).to.equal(RETAILER_NAME);
+    expect(batch.status).to.equal("Delivered");
+    expect(batch.currentCustodian).to.equal(RETAILER);
 
     expect(await traceLayer.getTransferCount("COFFEE-002")).to.equal(2n);
 
-    expect(history[0].fromLocation).to.equal("Farm A");
-    expect(history[0].toLocation).to.equal("Warehouse B");
+    expect(history[0].fromLocation).to.equal(FARM_NAME);
+    expect(history[0].toLocation).to.equal(DISTRIBUTOR_NAME);
     expect(history[0].status).to.equal("In transit");
     expect(history[0].operatorId).to.equal("operator-1");
-    expect(history[0].fromCustodian).to.equal("farm-a");
-    expect(history[0].toCustodian).to.equal("warehouse-b");
+    expect(history[0].fromCustodian).to.equal(FARM);
+    expect(history[0].toCustodian).to.equal(DISTRIBUTOR);
 
-    expect(history[1].fromLocation).to.equal("Warehouse B");
-    expect(history[1].toLocation).to.equal("Port C");
-    expect(history[1].status).to.equal("Exported");
+    expect(history[1].fromLocation).to.equal(DISTRIBUTOR_NAME);
+    expect(history[1].toLocation).to.equal(RETAILER_NAME);
+    expect(history[1].status).to.equal("Delivered");
     expect(history[1].operatorId).to.equal("operator-2");
-    expect(history[1].fromCustodian).to.equal("warehouse-b");
-    expect(history[1].toCustodian).to.equal("port-c");
+    expect(history[1].fromCustodian).to.equal(DISTRIBUTOR);
+    expect(history[1].toCustodian).to.equal(RETAILER);
 
     expect(await traceLayer.transferNonces("COFFEE-002")).to.equal(2n);
   });
@@ -141,8 +151,8 @@ describe("TraceLayer", function () {
       traceLayer.connect(stranger).registerBatch(
         "BATCH-001",
         "Cocoa",
-        "Farm B",
-        "farm-b"
+        FARM_NAME,
+        FARM
       )
     ).to.be.revertedWith("Only authorized relayer");
   });
@@ -156,10 +166,10 @@ describe("TraceLayer", function () {
       traceLayer.connect(stranger).recordTransfer(
         "COFFEE-003",
         "operator-1",
-        "farm-a",
-        "Warehouse B",
+        FARM,
+        DISTRIBUTOR_NAME,
         "In transit",
-        "warehouse-b",
+        DISTRIBUTOR,
         0n
       )
     ).to.be.revertedWith("Only authorized relayer");
@@ -175,10 +185,10 @@ describe("TraceLayer", function () {
         traceLayer,
         "COFFEE-004",
         "operator-1",
-        "warehouse-b",
-        "Warehouse C",
+        DISTRIBUTOR,
+        DISTRIBUTOR_NAME,
         "In transit",
-        "warehouse-c",
+        RETAILER,
         0n
       )
     ).to.be.revertedWith("Not the current custodian");
@@ -193,10 +203,10 @@ describe("TraceLayer", function () {
       traceLayer,
       "COFFEE-005",
       "operator-1",
-      "farm-a",
-      "Warehouse B",
+      FARM,
+      DISTRIBUTOR_NAME,
       "In transit",
-      "warehouse-b",
+      DISTRIBUTOR,
       0n
     );
 
@@ -205,10 +215,10 @@ describe("TraceLayer", function () {
         traceLayer,
         "COFFEE-005",
         "operator-2",
-        "farm-a",
-        "Port C",
-        "Exported",
-        "port-c",
+        FARM,
+        RETAILER_NAME,
+        "Delivered",
+        RETAILER,
         1n
       )
     ).to.be.revertedWith("Not the current custodian");
@@ -223,10 +233,10 @@ describe("TraceLayer", function () {
       traceLayer,
       "COFFEE-006",
       "operator-1",
-      "farm-a",
-      "Warehouse B",
+      FARM,
+      DISTRIBUTOR_NAME,
       "In transit",
-      "warehouse-b",
+      DISTRIBUTOR,
       0n
     );
 
@@ -235,10 +245,10 @@ describe("TraceLayer", function () {
         traceLayer,
         "COFFEE-006",
         "operator-2",
-        "warehouse-b",
-        "Port C",
-        "Exported",
-        "port-c",
+        DISTRIBUTOR,
+        RETAILER_NAME,
+        "Delivered",
+        RETAILER,
         0n
       )
     ).to.be.revertedWith("Invalid transfer nonce");
@@ -255,10 +265,10 @@ describe("TraceLayer", function () {
       traceLayer,
       "COFFEE-007",
       "operator-1",
-      "farm-a",
-      "Warehouse B",
+      FARM,
+      DISTRIBUTOR_NAME,
       "In transit",
-      "warehouse-b",
+      DISTRIBUTOR,
       0n
     );
 
@@ -268,10 +278,10 @@ describe("TraceLayer", function () {
       traceLayer,
       "COFFEE-007",
       "operator-2",
-      "warehouse-b",
-      "Port C",
-      "Exported",
-      "port-c",
+      DISTRIBUTOR,
+      RETAILER_NAME,
+      "Delivered",
+      RETAILER,
       1n
     );
 
@@ -287,8 +297,8 @@ describe("TraceLayer", function () {
       traceLayer.registerBatch(
         "BATCH-002",
         "Coffee",
-        "Farm B",
-        "farm-b"
+        FARM_NAME,
+        FARM
       )
     ).to.be.revertedWith("Batch already exists");
   });
@@ -301,21 +311,23 @@ describe("TraceLayer", function () {
         traceLayer,
         "UNKNOWN",
         "operator-1",
-        "farm-a",
-        "Warehouse B",
+        FARM,
+        DISTRIBUTOR_NAME,
         "Received",
-        "warehouse-b",
+        DISTRIBUTOR,
         0n
       )
     ).to.be.revertedWith("Batch does not exist");
   });
 
   it("allows the owner to change the relayer", async function () {
-    const { traceLayer, recorder, owner } = await deployTraceLayer();
+    const { traceLayer, recorder } = await deployTraceLayer();
+
+    const owner = await traceLayer.owner();
 
     await expect(traceLayer.setRelayer(recorder.address))
       .to.emit(traceLayer, "RelayerChanged")
-      .withArgs(owner.address, recorder.address);
+      .withArgs(owner, recorder.address);
 
     expect(await traceLayer.relayer()).to.equal(recorder.address);
 
@@ -323,16 +335,16 @@ describe("TraceLayer", function () {
       traceLayer.registerBatch(
         "BATCH-003",
         "Cocoa",
-        "Farm C",
-        "farm-c"
+        FARM_NAME,
+        FARM
       )
     ).to.be.revertedWith("Only authorized relayer");
 
     await traceLayer.connect(recorder).registerBatch(
       "BATCH-003",
       "Cocoa",
-      "Farm C",
-      "farm-c"
+      FARM_NAME,
+      FARM
     );
 
     expect(
@@ -366,10 +378,10 @@ describe("TraceLayer", function () {
         traceLayer,
         "EDGE-001",
         "operator-1",
-        "farm-a",
-        "Warehouse B",
+        FARM,
+        DISTRIBUTOR_NAME,
         "In transit",
-        "farm-a",
+        FARM,
         0n
       )
     ).to.be.revertedWith("Already the current custodian");
@@ -379,7 +391,7 @@ describe("TraceLayer", function () {
     const { traceLayer } = await deployTraceLayer();
 
     await expect(
-      traceLayer.registerBatch("", "Coffee", "Farm A", "farm-a")
+      traceLayer.registerBatch("", "Coffee", FARM_NAME, FARM)
     ).to.be.revertedWith("Batch ID required");
   });
 
@@ -387,7 +399,7 @@ describe("TraceLayer", function () {
     const { traceLayer } = await deployTraceLayer();
 
     await expect(
-      traceLayer.registerBatch("EDGE-002", "", "Farm A", "farm-a")
+      traceLayer.registerBatch("EDGE-002", "", FARM_NAME, FARM)
     ).to.be.revertedWith("Product name required");
   });
 
@@ -395,7 +407,7 @@ describe("TraceLayer", function () {
     const { traceLayer } = await deployTraceLayer();
 
     await expect(
-      traceLayer.registerBatch("EDGE-003", "Coffee", "", "farm-a")
+      traceLayer.registerBatch("EDGE-003", "Coffee", "", FARM)
     ).to.be.revertedWith("Origin required");
   });
 
@@ -403,8 +415,59 @@ describe("TraceLayer", function () {
     const { traceLayer } = await deployTraceLayer();
 
     await expect(
-      traceLayer.registerBatch("EDGE-004", "Coffee", "Farm A", "")
+      traceLayer.registerBatch("EDGE-004", "Coffee", FARM_NAME, "")
     ).to.be.revertedWith("Custodian ID required");
+  });
+
+  it("rejects unrecognized initial custodian IDs", async function () {
+    const { traceLayer } = await deployTraceLayer();
+
+    await expect(
+      traceLayer.registerBatch(
+        "EDGE-009",
+        "Coffee",
+        FARM_NAME,
+        "unknown-organization"
+      )
+    ).to.be.revertedWith("Unrecognized custodian");
+  });
+
+  it("rejects unrecognized current custodian IDs", async function () {
+    const { traceLayer } = await deployTraceLayer();
+
+    await registerCoffeeBatch(traceLayer, "EDGE-010");
+
+    await expect(
+      transferBatch(
+        traceLayer,
+        "EDGE-010",
+        "operator-1",
+        "unknown-organization",
+        DISTRIBUTOR_NAME,
+        "In transit",
+        DISTRIBUTOR,
+        0n
+      )
+    ).to.be.revertedWith("Unrecognized current custodian");
+  });
+
+  it("rejects unrecognized new custodian IDs", async function () {
+    const { traceLayer } = await deployTraceLayer();
+
+    await registerCoffeeBatch(traceLayer, "EDGE-011");
+
+    await expect(
+      transferBatch(
+        traceLayer,
+        "EDGE-011",
+        "operator-1",
+        FARM,
+        DISTRIBUTOR_NAME,
+        "In transit",
+        "unknown-organization",
+        0n
+      )
+    ).to.be.revertedWith("Unrecognized new custodian");
   });
 
   it("rejects empty operator IDs", async function () {
@@ -417,10 +480,10 @@ describe("TraceLayer", function () {
         traceLayer,
         "EDGE-005",
         "",
-        "farm-a",
-        "Warehouse B",
+        FARM,
+        DISTRIBUTOR_NAME,
         "In transit",
-        "warehouse-b",
+        DISTRIBUTOR,
         0n
       )
     ).to.be.revertedWith("Operator ID required");
@@ -436,10 +499,10 @@ describe("TraceLayer", function () {
         traceLayer,
         "EDGE-006",
         "operator-1",
-        "farm-a",
+        FARM,
         "",
         "In transit",
-        "warehouse-b",
+        DISTRIBUTOR,
         0n
       )
     ).to.be.revertedWith("Destination required");
@@ -455,10 +518,10 @@ describe("TraceLayer", function () {
         traceLayer,
         "EDGE-007",
         "operator-1",
-        "farm-a",
-        "Warehouse B",
+        FARM,
+        DISTRIBUTOR_NAME,
         "",
-        "warehouse-b",
+        DISTRIBUTOR,
         0n
       )
     ).to.be.revertedWith("Status required");
@@ -474,8 +537,8 @@ describe("TraceLayer", function () {
         traceLayer,
         "EDGE-008",
         "operator-1",
-        "farm-a",
-        "Warehouse B",
+        FARM,
+        DISTRIBUTOR_NAME,
         "In transit",
         "",
         0n
@@ -491,10 +554,10 @@ describe("TraceLayer", function () {
     const transfer = {
       batchId: "REPLAY-001",
       operatorId: "operator-1",
-      currentCustodian: "farm-a",
-      destination: "Warehouse B",
+      currentCustodian: FARM,
+      destination: DISTRIBUTOR_NAME,
       status: "In transit",
-      newCustodian: "warehouse-b",
+      newCustodian: DISTRIBUTOR,
       nonce: 0n
     };
 
@@ -525,5 +588,4 @@ describe("TraceLayer", function () {
     expect(await traceLayer.getTransferCount(transfer.batchId)).to.equal(1n);
     expect(await traceLayer.transferNonces(transfer.batchId)).to.equal(1n);
   });
-
 });

@@ -3,22 +3,9 @@ import assert from "node:assert/strict";
 
 import handler from "../netlify/functions/record-transfer.mjs";
 
-const envNames = [
-  "TRACKNYLL_CODE_TRACKNYLL_DEMO",
-  "TRACKNYLL_CODE_FARM_A",
-  "TRACKNYLL_CODE_WAREHOUSE_B"
-];
-
-const originalValues = Object.fromEntries(
-  envNames.map((name) => [name, process.env[name]])
-);
-
-for (const name of envNames) {
-  delete process.env[name];
-}
-
-process.env.TRACKNYLL_CODE_FARM_A = "farm-test-code";
-process.env.TRACKNYLL_CODE_WAREHOUSE_B = "warehouse-test-code";
+const FARM = "green-valley-farms";
+const DISTRIBUTOR = "freshroute-distribution";
+const RETAILER = "harvest-market";
 
 function createMockContract(overrides = {}) {
   const calls = [];
@@ -26,7 +13,7 @@ function createMockContract(overrides = {}) {
   const contract = {
     getBatch: async () => ({
       exists: true,
-      currentCustodian: "farm-a"
+      currentCustodian: FARM
     }),
 
     transferNonces: async () => 0n,
@@ -47,20 +34,22 @@ function createMockContract(overrides = {}) {
 }
 
 function createRequest(overrides = {}) {
-  return new Request("https://example.test/.netlify/functions/record-transfer", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({
-      batchId: "BATCH-001",
-      destination: "Warehouse B",
-      status: "In transit",
-      newCustodian: "warehouse-b",
-      organizationCode: "farm-test-code",
-      ...overrides
-    })
-  });
+  return new Request(
+    "https://example.test/.netlify/functions/record-transfer",
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        batchId: "BATCH-001",
+        destination: "FreshRoute Distribution",
+        status: "In transit",
+        newCustodian: DISTRIBUTOR,
+        ...overrides
+      })
+    }
+  );
 }
 
 async function runHandler({ overrides, contractOverrides } = {}) {
@@ -81,23 +70,21 @@ async function runHandler({ overrides, contractOverrides } = {}) {
   };
 }
 
-test("rejects an incorrect organization access code", async () => {
-  const { response, body, calls } = await runHandler({
-    overrides: { organizationCode: "wrong-code" }
-  });
+test("allows a guest to record a transfer without an organization access code", async () => {
+  const { response, body, calls } = await runHandler();
 
-  assert.equal(response.status, 401);
-  assert.equal(body.error, "Invalid organization access code.");
-  assert.equal(calls.length, 0);
-});
+  assert.equal(response.status, 200);
+  assert.equal(body.success, true);
+  assert.equal(body.fromOrganization, FARM);
+  assert.equal(body.toOrganization, DISTRIBUTOR);
+  assert.equal(body.transactionHash, "0xtesttransaction");
 
-test("rejects an organization that is not the current custodian", async () => {
-  const { response, body, calls } = await runHandler({
-    overrides: { organizationCode: "warehouse-test-code" }
-  });
-
-  assert.equal(response.status, 403);
-  assert.equal(calls.length, 0);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0][0], "BATCH-001");
+  assert.equal(calls[0][1], "guest");
+  assert.equal(calls[0][2], FARM);
+  assert.equal(calls[0][5], DISTRIBUTOR);
+  assert.equal(calls[0][6], 0n);
 });
 
 test("rejects an unrecognized destination organization", async () => {
@@ -111,41 +98,16 @@ test("rejects an unrecognized destination organization", async () => {
 
 test("rejects transferring custody to the current custodian", async () => {
   const { response, calls } = await runHandler({
-    overrides: { newCustodian: "farm-a" }
-  });
-
-  assert.equal(response.status, 400);
-  assert.equal(calls.length, 0);
-});
-
-test("records a valid handoff for the current custodian", async () => {
-  const { response, body, calls } = await runHandler();
-
-  assert.equal(response.status, 200);
-  assert.equal(body.success, true);
-  assert.equal(body.fromOrganization, "farm-a");
-  assert.equal(body.toOrganization, "warehouse-b");
-  assert.equal(body.transactionHash, "0xtesttransaction");
-  assert.equal(body.blockNumber, 123);
-
-  assert.equal(calls.length, 1);
-  assert.equal(calls[0][0], "BATCH-001");
-  assert.equal(calls[0][1], "farm-a");
-  assert.equal(calls[0][5], "warehouse-b");
-  assert.equal(calls[0][6], 0n);
-});
-
-test("returns a conflict when the contract rejects a stale nonce", async () => {
-  const { response, body, calls } = await runHandler({
+    overrides: { newCustodian: DISTRIBUTOR },
     contractOverrides: {
-      recordTransfer: async () => {
-        throw new Error("Invalid transfer nonce");
-      }
+      getBatch: async () => ({
+        exists: true,
+        currentCustodian: DISTRIBUTOR
+      })
     }
   });
 
-  assert.equal(response.status, 409);
-  assert.match(body.error, /batch changed/i);
+  assert.equal(response.status, 400);
   assert.equal(calls.length, 0);
 });
 
@@ -163,12 +125,38 @@ test("rejects a transfer when the batch does not exist", async () => {
   assert.equal(calls.length, 0);
 });
 
-test.after(() => {
-  for (const name of envNames) {
-    if (originalValues[name] === undefined) {
-      delete process.env[name];
-    } else {
-      process.env[name] = originalValues[name];
+test("rejects a batch with an unrecognized current custodian", async () => {
+  const { response, calls } = await runHandler({
+    contractOverrides: {
+      getBatch: async () => ({
+        exists: true,
+        currentCustodian: "unknown-organization"
+      })
     }
-  }
+  });
+
+  assert.equal(response.status, 409);
+  assert.equal(calls.length, 0);
+});
+
+test("returns a conflict when the contract rejects a stale nonce", async () => {
+  const { response, body } = await runHandler({
+    contractOverrides: {
+      recordTransfer: async () => {
+        throw new Error("Invalid transfer nonce");
+      }
+    }
+  });
+
+  assert.equal(response.status, 409);
+  assert.match(body.error, /batch changed/i);
+});
+
+test("rejects an invalid handoff status", async () => {
+  const { response, calls } = await runHandler({
+    overrides: { status: "Unknown status" }
+  });
+
+  assert.equal(response.status, 400);
+  assert.equal(calls.length, 0);
 });

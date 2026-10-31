@@ -1,4 +1,3 @@
-
 <!doctype html>
 <html lang="en">
 <head>
@@ -14,7 +13,7 @@
 <body>
   <div class="app-shell">
     <header class="topbar">
-      <a class="brand" href="#">
+      <a class="brand" href="">
         <span class="brand-mark">T<span>.</span></span>
         <span>Tracknyll<small>SUPPLY CHAIN PROVENANCE</small></span>
       </a>
@@ -37,21 +36,11 @@
             <p class="eyebrow">WORKSPACE / 01</p>
             <h2>Supply chain console</h2>
           </div>
-          <div id="walletStatus" class="wallet-status">Public demo · Shared backend wallet</div>
+          <div id="walletStatus" class="wallet-status">Sepolia testnet · Shared backend wallet</div>
         </div>
 
         <div id="notice" class="notice" role="status" aria-live="polite" hidden></div>
 
-        <section class="panel auth-panel">
-          <div class="panel-heading">
-            <span class="panel-index">DEMO</span>
-            <div>
-              <h3>Public access</h3>
-              <p>Explore Tracknyll without creating an account or connecting an individual wallet.</p>
-            </div>
-          </div>
-          <p class="field-hint">Blockchain transactions use one shared backend wallet. An organization access code is required to record handoffs.</p>
-        </section>
 
         <div class="panel-grid">
           <section class="panel">
@@ -61,13 +50,15 @@
             </div>
             <form id="registerForm">
               <label for="batchId">Batch ID</label>
-              <input id="batchId" name="batchId" placeholder="e.g. COFFEE-2026-001" required maxlength="80">
+              <input id="batchId" name="batchId" placeholder="e.g. LETTUCE-2026-001" required maxlength="80">
 
               <label for="productName">Product name</label>
-              <input id="productName" name="productName" placeholder="e.g. Arabica coffee beans" required maxlength="120">
+              <input id="productName" name="productName" placeholder="e.g. Romaine lettuce" required maxlength="120">
 
               <label for="origin">Origin location</label>
-              <input id="origin" name="origin" placeholder="e.g. Antioquia, Colombia" required maxlength="120">
+              <input id="origin" name="origin" placeholder="e.g. Green Valley Farms — Sample Location" required maxlength="120">
+
+              <p class="field-hint">New batches are initially registered under Green Valley Farms.</p>
 
               <button class="button button-primary" type="submit">Register batch <span>↗</span></button>
             </form>
@@ -83,7 +74,7 @@
               <input id="transferBatchId" name="transferBatchId" placeholder="Enter an existing batch ID" required maxlength="80">
 
               <label for="destination">New location</label>
-              <input id="destination" name="destination" placeholder="e.g. Bogotá distribution center" required maxlength="120">
+              <input id="destination" name="destination" placeholder="e.g. FreshRoute distribution center" required maxlength="120">
 
               <label for="transferStatus">Status</label>
               <select id="transferStatus" name="transferStatus" required>
@@ -94,26 +85,13 @@
                 <option value="Delivered">Delivered</option>
               </select>
 
-              <label for="organizationCode">Your organization access code</label>
-              <input
-                id="organizationCode"
-                name="organizationCode"
-                type="password"
-                placeholder="Enter your organization's access code"
-                required
-                maxlength="100"
-                autocomplete="off"
-              >
-              <p class="field-hint">Verifies your organization's permission to transfer this batch.</p>
-
               <label for="newCustodian">Next custodian organization</label>
-                <select id="newCustodian" name="newCustodian" required>
-                  <option value="" disabled selected>Select an organization</option>
-                  <option value="tracknyll-demo">Tracknyll Demo</option>
-                  <option value="farm-a">Farm A</option>
-                  <option value="warehouse-b">Warehouse B</option>
-                </select>
-                <p class="field-hint">Choose the organization receiving custody of this batch.</p>
+              <select id="newCustodian" name="newCustodian" required>
+                <option value="" disabled selected>Select an organization</option>
+                <option value="freshroute-distribution">FreshRoute Distribution</option>
+                <option value="harvest-market">Harvest Market</option>
+              </select>
+              <p class="field-hint">Choose the organization receiving custody of this batch.</p>
 
               <button class="button button-primary" type="submit">Record transfer <span>↗</span></button>
             </form>

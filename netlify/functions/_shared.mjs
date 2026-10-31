@@ -21,9 +21,9 @@ export const ALLOWED_STATUSES = new Set([
 ]);
 
 const ORGANIZATION_CODE_ENV = {
-  "tracknyll-demo": "TRACKNYLL_CODE_TRACKNYLL_DEMO",
-  "farm-a": "TRACKNYLL_CODE_FARM_A",
-  "warehouse-b": "TRACKNYLL_CODE_WAREHOUSE_B"
+  "green-valley-farms": "TRACKNYLL_CODE_GREEN_VALLEY_FARMS",
+  "freshroute-distribution": "TRACKNYLL_CODE_FRESHROUTE_DISTRIBUTION",
+  "harvest-market": "TRACKNYLL_CODE_HARVEST_MARKET"
 };
 
 export function getOrganizationForCode(code) {
@@ -48,8 +48,23 @@ export function getOrganizationForCode(code) {
   return null;
 }
 
+const ALLOWED_ORGANIZATIONS = new Set([
+  "green-valley-farms",
+  "freshroute-distribution",
+  "harvest-market"
+]);
+
 export function isAllowedOrganization(organizationId) {
-  return Object.hasOwn(ORGANIZATION_CODE_ENV, organizationId);
+  return ALLOWED_ORGANIZATIONS.has(organizationId);
+}
+
+const ALLOWED_DESTINATION_ORGANIZATIONS = new Set([
+  "freshroute-distribution",
+  "harvest-market"
+]);
+
+export function isAllowedDestinationOrganization(organizationId) {
+  return ALLOWED_DESTINATION_ORGANIZATIONS.has(organizationId);
 }
 
 const rateLimits = new Map();

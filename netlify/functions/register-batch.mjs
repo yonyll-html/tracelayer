@@ -1,4 +1,3 @@
-
 import {
   json,
   parseBody,
@@ -7,7 +6,7 @@ import {
   getWriteContract
 } from "./_shared.mjs";
 
-const INITIAL_CUSTODIAN = "tracknyll-demo";
+const INITIAL_CUSTODIAN = "green-valley-farms";
 
 export default async function handler(request, context) {
   const rejected = validateRequest(request, context);
