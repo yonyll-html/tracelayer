@@ -6,7 +6,7 @@ export const CONTRACT_ADDRESS =
 
 const ABI = [
   "function relayer() view returns (address)",
-  "function getBatch(string batchId) view returns (string productName, string origin, string currentLocation, string status, string currentCustodian, uint256 createdAt, bool exists)",
+  "function getBatch(string batchId) view returns ((string productName, string origin, string currentLocation, string status, string currentCustodian, uint256 createdAt, bool exists))",
   "function registerBatch(string batchId, string productName, string origin, string custodianId)",
   "function recordTransfer(string batchId, string operatorId, string currentCustodian, string toLocation, string status, string newCustodian, uint256 expectedNonce)",
   "function transferNonces(string batchId) view returns (uint256)"
