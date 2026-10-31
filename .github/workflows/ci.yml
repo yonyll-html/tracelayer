@@ -36,6 +36,9 @@ jobs:
       - name: Run backend authorization tests
         run: node --test test/backend-auth.test.mjs
 
+      - name: Run transfer endpoint tests
+        run: node --test test/record-transfer.test.mjs
+
       - name: Check backend syntax
         run: |
           node --check netlify/functions/_shared.mjs
