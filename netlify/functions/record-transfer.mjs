@@ -9,7 +9,7 @@ import {
   ALLOWED_STATUSES
 } from "./_shared.mjs";
 
-export default async function handler(request, context) {
+export default async function handler(request, context, dependencies = {}) {
   const rejected = validateRequest(request, context);
   if (rejected) return rejected;
 
@@ -49,7 +49,8 @@ export default async function handler(request, context) {
       });
     }
 
-    const { contract } = await getWriteContract();
+    const getContract = dependencies.getWriteContract || getWriteContract;
+    const { contract } = await getContract();
 
     const batch = await contract.getBatch(batchId);
 
