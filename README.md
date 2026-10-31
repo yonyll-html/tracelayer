@@ -1,57 +1,140 @@
-# Sample Hardhat 3 Project (`mocha` and `ethers`)
+# Tracknyll
 
-This project showcases a Hardhat 3 project using `mocha` for tests and the `ethers` library for Ethereum interactions.
+**A blockchain-based supply-chain tracking prototype built with Solidity, Ethereum, and Netlify Functions.**
 
-To learn more about Hardhat 3, please visit the [Getting Started guide](https://hardhat.org/docs/getting-started#getting-started-with-hardhat-3). To share your feedback, join our [Hardhat 3](https://hardhat.org/hardhat3-telegram-group) Telegram group or [open an issue](https://github.com/NomicFoundation/hardhat/issues/new) in our GitHub issue tracker.
+Tracknyll explores how blockchain can help organizations record and verify the movement of products across a supply chain. It allows users to register product batches, record custody transfers, and view a batch's tracking history.
 
-## Project Overview
+The project is an educational prototype inspired by real-world blockchain supply-chain initiatives. It uses fictional organizations to demonstrate how the system works.
 
-This example project includes:
+## Features
 
-- A simple Hardhat configuration file.
-- Foundry-compatible Solidity unit tests.
-- TypeScript integration tests using `mocha` and ethers.js
-- Examples demonstrating how to connect to different types of networks, including locally simulating OP mainnet.
+- **Batch registration:** Register products with a unique batch ID, product name, origin, and initial custodian.
+- **Custody tracking:** Record transfers between recognized organizations.
+- **Transfer history:** Retrieve a batch's journey, including locations, statuses, timestamps, and custodians.
+- **Organization validation:** Restrict batch registration and transfers to recognized organizations.
+- **Shared backend wallet:** Submit blockchain transactions through a backend relayer instead of requiring each visitor to connect a wallet.
+- **Sepolia deployment:** Store tracking records on the Ethereum Sepolia test network.
 
-## Usage
+## How It Works
 
-### Running Tests
+Tracknyll demonstrates a sample supply-chain journey:
 
-To run all the tests in the project, execute the following command:
+`Green Valley Farms → FreshRoute Distribution → Harvest Market`
 
-```shell
+These are fictional organizations used for demonstration purposes.
+
+When a batch is registered, its initial information is stored in the TraceLayer smart contract. When custody changes, the backend submits a transaction that records the transfer and updates the batch's current location and custodian.
+
+The information can then be retrieved from the blockchain to display the batch's journey.
+
+## Architecture
+
+Tracknyll has three main components:
+
+| Component | Technology | Purpose |
+|---|---|---|
+| Frontend | HTML, CSS, JavaScript | User interface and batch tracking |
+| Backend | Netlify Functions | Validate requests and submit transactions |
+| Blockchain | Solidity, Ethereum Sepolia | Store batch and transfer records |
+
+The frontend communicates with the backend, which interacts with the TraceLayer smart contract using ethers.js. A shared backend wallet acts as the authorized relayer.
+
+## Tech Stack
+
+- Solidity
+- Hardhat 3
+- JavaScript
+- HTML and CSS
+- ethers.js
+- Netlify Functions
+- Ethereum Sepolia
+
+## Getting Started
+
+### Prerequisites
+
+- Node.js and npm
+- Git
+- A configured Sepolia RPC endpoint
+- A funded Sepolia wallet for deployment and backend transactions
+
+### 1. Clone the repository
+
+```bash
+git clone https://github.com/yonyll-html/tracknyll.git
+cd tracknyll
+```
+
+### 2. Install dependencies
+
+```bash
+npm install
+```
+
+### 3. Configure environment variables
+
+Create a local `.env` file using the variable names expected by the backend and deployment scripts.
+
+Configure the required Sepolia RPC URL, deployment account, backend relayer wallet, and contract address.
+
+**Never commit `.env` files, private keys, or other credentials.**
+
+### 4. Run the tests
+
+```bash
 npx hardhat test
 ```
 
-You can also selectively run the Solidity or `mocha` tests:
+### 5. Start the local application
 
-```shell
-npx hardhat test solidity
-npx hardhat test mocha
+```bash
+npx netlify dev
 ```
 
-### Make a deployment to Sepolia
+Open the local URL printed in the terminal, usually:
 
-This project includes an example Ignition module to deploy the contract. You can deploy this module to a locally simulated chain or to Sepolia.
-
-To run the deployment to a local chain:
-
-```shell
-npx hardhat ignition deploy ignition/modules/Counter.ts
+```text
+http://localhost:8888
 ```
 
-To run the deployment to Sepolia, you need an account with funds to send the transaction. The provided Hardhat configuration includes a Configuration Variable called `SEPOLIA_PRIVATE_KEY`, which you can use to set the private key of the account you want to use.
+## Smart Contract
 
-You can set the `SEPOLIA_PRIVATE_KEY` variable using the `hardhat-keystore` plugin or by setting it as an environment variable.
+The `TraceLayer.sol` contract handles:
 
-To set the `SEPOLIA_PRIVATE_KEY` config variable using `hardhat-keystore`:
+- Batch registration
+- Custody transfers
+- Organization validation
+- Transfer nonce tracking
+- Batch retrieval
+- Transfer history retrieval
+- Authorized relayer management
 
-```shell
-npx hardhat keystore set SEPOLIA_PRIVATE_KEY
-```
+Only the contract owner can change the authorized relayer. Blockchain updates must be submitted by that relayer.
 
-After setting the variable, you can run the deployment with the Sepolia network:
+## Testing
 
-```shell
-npx hardhat ignition deploy --network sepolia ignition/modules/Counter.ts
-```
+The project includes Solidity and backend tests covering batch registration, transfer validation, organization authorization, replay protection, and other expected behaviors.
+
+The latest completed test run passed **38 tests**:
+
+- 28 Solidity tests
+- 10 backend tests
+
+An end-to-end test also verified batch registration followed by two custody transfers on Sepolia.
+
+## Limitations
+
+Tracknyll is an educational prototype, not a production-ready supply-chain platform.
+
+- The sample organizations are fictional.
+- Blockchain records are publicly accessible on the Sepolia test network.
+- The shared backend wallet centralizes transaction submission.
+- Blockchain immutability does not guarantee that submitted information is accurate.
+- The prototype has not undergone a professional security audit or real-world deployment trial.
+
+## Project Motivation
+
+Tracknyll was developed to explore whether blockchain can improve supply-chain transparency and verification compared with traditional databases.
+
+The project helped demonstrate both the potential and limitations of blockchain when multiple organizations need to share records.
+
