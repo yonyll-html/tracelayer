@@ -1,3 +1,4 @@
+
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.28;
 
@@ -5,12 +6,14 @@ pragma solidity ^0.8.28;
 /// @notice Educational supply-chain traceability demo.
 contract TraceLayer {
     address public owner;
+    address public relayer;
 
     struct Batch {
         string productName;
         string origin;
         string currentLocation;
         string status;
+        string currentCustodian;
         uint256 createdAt;
         bool exists;
     }
@@ -20,32 +23,31 @@ contract TraceLayer {
         string toLocation;
         string status;
         uint256 timestamp;
-        address recordedBy;
+        string operatorId;
+        string fromCustodian;
+        string toCustodian;
     }
 
     mapping(string => Batch) private batches;
     mapping(string => Transfer[]) private transferHistory;
-    mapping(address => bool) public authorizedRecorders;
+    mapping(string => uint256) public transferNonces;
+
+    event RelayerChanged(
+        address indexed previousRelayer,
+        address indexed newRelayer
+    );
 
     event BatchRegistered(
         string indexed batchId,
         string productName,
         string origin,
-        address indexed registeredBy
+        string custodianId
     );
 
     event TransferRecorded(
         string indexed batchId,
-        string fromLocation,
-        string toLocation,
-        string status,
-        uint256 timestamp,
-        address indexed recordedBy
-    );
-
-    event RecorderAuthorizationChanged(
-        address indexed recorder,
-        bool authorized
+        string indexed operatorId,
+        uint256 timestamp
     );
 
     modifier onlyOwner() {
@@ -53,35 +55,35 @@ contract TraceLayer {
         _;
     }
 
-    modifier onlyAuthorized() {
-        require(authorizedRecorders[msg.sender], "Not an authorized recorder");
+    modifier onlyRelayer() {
+        require(msg.sender == relayer, "Only authorized relayer");
         _;
     }
 
     constructor() {
         owner = msg.sender;
-        authorizedRecorders[msg.sender] = true;
+        relayer = msg.sender;
     }
 
-    function setRecorderAuthorization(
-        address recorder,
-        bool authorized
-    ) external onlyOwner {
-        require(recorder != address(0), "Invalid recorder address");
+    function setRelayer(address newRelayer) external onlyOwner {
+        require(newRelayer != address(0), "Invalid relayer address");
 
-        authorizedRecorders[recorder] = authorized;
+        address previousRelayer = relayer;
+        relayer = newRelayer;
 
-        emit RecorderAuthorizationChanged(recorder, authorized);
+        emit RelayerChanged(previousRelayer, newRelayer);
     }
 
     function registerBatch(
         string calldata batchId,
         string calldata productName,
-        string calldata origin
-    ) external onlyAuthorized {
+        string calldata origin,
+        string calldata custodianId
+    ) external onlyRelayer {
         require(bytes(batchId).length > 0, "Batch ID required");
         require(bytes(productName).length > 0, "Product name required");
         require(bytes(origin).length > 0, "Origin required");
+        require(bytes(custodianId).length > 0, "Custodian ID required");
         require(!batches[batchId].exists, "Batch already exists");
 
         batches[batchId] = Batch({
@@ -89,6 +91,7 @@ contract TraceLayer {
             origin: origin,
             currentLocation: origin,
             status: "Registered",
+            currentCustodian: custodianId,
             createdAt: block.timestamp,
             exists: true
         });
@@ -97,20 +100,45 @@ contract TraceLayer {
             batchId,
             productName,
             origin,
-            msg.sender
+            custodianId
         );
     }
 
     function recordTransfer(
         string calldata batchId,
+        string calldata operatorId,
+        string calldata currentCustodian,
         string calldata toLocation,
-        string calldata status
-    ) external onlyAuthorized {
+        string calldata status,
+        string calldata newCustodian,
+        uint256 expectedNonce
+    ) external onlyRelayer {
         require(batches[batchId].exists, "Batch does not exist");
+        require(bytes(operatorId).length > 0, "Operator ID required");
+        require(bytes(currentCustodian).length > 0, "Custodian ID required");
         require(bytes(toLocation).length > 0, "Destination required");
         require(bytes(status).length > 0, "Status required");
+        require(bytes(newCustodian).length > 0, "New custodian required");
 
         Batch storage batch = batches[batchId];
+
+        require(
+            keccak256(bytes(currentCustodian)) ==
+                keccak256(bytes(batch.currentCustodian)),
+            "Not the current custodian"
+        );
+
+        require(
+            keccak256(bytes(newCustodian)) !=
+                keccak256(bytes(batch.currentCustodian)),
+            "Already the current custodian"
+        );
+
+        require(
+            expectedNonce == transferNonces[batchId],
+            "Invalid transfer nonce"
+        );
+
         string memory fromLocation = batch.currentLocation;
 
         transferHistory[batchId].push(
@@ -119,20 +147,22 @@ contract TraceLayer {
                 toLocation: toLocation,
                 status: status,
                 timestamp: block.timestamp,
-                recordedBy: msg.sender
+                operatorId: operatorId,
+                fromCustodian: batch.currentCustodian,
+                toCustodian: newCustodian
             })
         );
 
+        transferNonces[batchId]++;
+
         batch.currentLocation = toLocation;
         batch.status = status;
+        batch.currentCustodian = newCustodian;
 
         emit TransferRecorded(
             batchId,
-            fromLocation,
-            toLocation,
-            status,
-            block.timestamp,
-            msg.sender
+            operatorId,
+            block.timestamp
         );
     }
 

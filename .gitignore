@@ -45,3 +45,7 @@ Thumbs.db
 
 # Local Hardhat deployment records
 /ignition/deployments/
+
+# Temporary backups
+*.bak
+*.step7-backup
