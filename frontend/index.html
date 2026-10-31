@@ -50,7 +50,7 @@
               <p>Explore Tracknyll without creating an account or connecting an individual wallet.</p>
             </div>
           </div>
-          <p class="field-hint">Blockchain transactions are submitted through one shared backend wallet. Anyone can use this educational demo.</p>
+          <p class="field-hint">Blockchain transactions use one shared backend wallet. An organization access code is required to record handoffs.</p>
         </section>
 
         <div class="panel-grid">
@@ -94,9 +94,26 @@
                 <option value="Delivered">Delivered</option>
               </select>
 
-              <label for="newCustodian">Next custodian organization ID</label>
-              <input id="newCustodian" name="newCustodian" placeholder="e.g. warehouse-b" required maxlength="80">
-              <p class="field-hint">Enter the organization receiving custody of this batch.</p>
+              <label for="organizationCode">Your organization access code</label>
+              <input
+                id="organizationCode"
+                name="organizationCode"
+                type="password"
+                placeholder="Enter your organization's access code"
+                required
+                maxlength="100"
+                autocomplete="off"
+              >
+              <p class="field-hint">Verifies your organization's permission to transfer this batch.</p>
+
+              <label for="newCustodian">Next custodian organization</label>
+                <select id="newCustodian" name="newCustodian" required>
+                  <option value="" disabled selected>Select an organization</option>
+                  <option value="tracknyll-demo">Tracknyll Demo</option>
+                  <option value="farm-a">Farm A</option>
+                  <option value="warehouse-b">Warehouse B</option>
+                </select>
+                <p class="field-hint">Choose the organization receiving custody of this batch.</p>
 
               <button class="button button-primary" type="submit">Record transfer <span>↗</span></button>
             </form>
@@ -129,7 +146,7 @@
     </main>
 
     <footer>
-      <span>TRACKNYLL <span class="footer-separator">/</span> EDUCATIONAL PROTOTYPE</span>
+      <span>TRACKNYLL <span class="footer-separator">/</span> Nyll Technologies</span>
       <span>Built for learning about supply-chain traceability.</span>
     </footer>
   </div>
