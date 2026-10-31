@@ -483,7 +483,7 @@ describe("TraceLayer", function () {
     ).to.be.revertedWith("New custodian required");
   });
 
-  it("rejects replaying an identical transfer", async function () {
+  it("rejects replaying a transfer after custody has changed", async function () {
     const { traceLayer } = await deployTraceLayer();
 
     await registerCoffeeBatch(traceLayer, "REPLAY-001");
