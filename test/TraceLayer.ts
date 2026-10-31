@@ -482,4 +482,48 @@ describe("TraceLayer", function () {
       )
     ).to.be.revertedWith("New custodian required");
   });
+
+  it("rejects replaying a transfer after custody has changed", async function () {
+    const { traceLayer } = await deployTraceLayer();
+
+    await registerCoffeeBatch(traceLayer, "REPLAY-001");
+
+    const transfer = {
+      batchId: "REPLAY-001",
+      operatorId: "operator-1",
+      currentCustodian: "farm-a",
+      destination: "Warehouse B",
+      status: "In transit",
+      newCustodian: "warehouse-b",
+      nonce: 0n
+    };
+
+    await transferBatch(
+      traceLayer,
+      transfer.batchId,
+      transfer.operatorId,
+      transfer.currentCustodian,
+      transfer.destination,
+      transfer.status,
+      transfer.newCustodian,
+      transfer.nonce
+    );
+
+    await expect(
+      transferBatch(
+        traceLayer,
+        transfer.batchId,
+        transfer.operatorId,
+        transfer.currentCustodian,
+        transfer.destination,
+        transfer.status,
+        transfer.newCustodian,
+        transfer.nonce
+      )
+    ).to.be.revertedWith("Not the current custodian");
+
+    expect(await traceLayer.getTransferCount(transfer.batchId)).to.equal(1n);
+    expect(await traceLayer.transferNonces(transfer.batchId)).to.equal(1n);
+  });
+
 });

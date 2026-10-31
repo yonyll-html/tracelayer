@@ -1,0 +1,45 @@
+name: Tracknyll CI
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Run tests and syntax checks
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run Hardhat tests
+        run: npx hardhat test test/TraceLayer.ts
+
+      - name: Run backend authorization tests
+        run: node --test test/backend-auth.test.mjs
+
+      - name: Check backend syntax
+        run: |
+          node --check netlify/functions/_shared.mjs
+          node --check netlify/functions/record-transfer.mjs
+
+      - name: Check frontend syntax
+        run: node --check frontend/app.js

@@ -1,14 +1,13 @@
-
 import {
   json,
   parseBody,
   validateText,
   validateRequest,
   getWriteContract,
+  getOrganizationForCode,
+  isAllowedOrganization,
   ALLOWED_STATUSES
 } from "./_shared.mjs";
-
-const PUBLIC_OPERATOR_ID = "public-demo";
 
 export default async function handler(request, context) {
   const rejected = validateRequest(request, context);
@@ -25,9 +24,29 @@ export default async function handler(request, context) {
       "New custodian organization",
       80
     );
+    const organizationCode = validateText(
+      body.organizationCode,
+      "Organization access code",
+      100
+    );
 
     if (!ALLOWED_STATUSES.has(status)) {
       return json(400, { error: "Choose a valid handoff status." });
+    }
+
+    const authorizedOrganization =
+      getOrganizationForCode(organizationCode);
+
+    if (!authorizedOrganization) {
+      return json(401, {
+        error: "Invalid organization access code."
+      });
+    }
+
+    if (!isAllowedOrganization(newCustodian)) {
+      return json(400, {
+        error: "Choose a recognized destination organization."
+      });
     }
 
     const { contract } = await getWriteContract();
@@ -37,6 +56,12 @@ export default async function handler(request, context) {
     if (!batch.exists) {
       return json(404, {
         error: "No batch with that ID was found on Sepolia."
+      });
+    }
+
+    if (authorizedOrganization !== batch.currentCustodian) {
+      return json(403, {
+        error: "This access code is not authorized to transfer this batch."
       });
     }
 
@@ -50,7 +75,7 @@ export default async function handler(request, context) {
 
     const tx = await contract.recordTransfer(
       batchId,
-      PUBLIC_OPERATOR_ID,
+      authorizedOrganization,
       batch.currentCustodian,
       destination,
       status,
@@ -88,7 +113,8 @@ export default async function handler(request, context) {
 
     if (
       message.includes("Invalid transfer nonce") ||
-      message.includes("Batch custodian mismatch")
+      message.includes("Not the current custodian") ||
+      message.includes("Already the current custodian")
     ) {
       return json(409, {
         error: "The batch changed before the handoff could be recorded. Refresh and try again."

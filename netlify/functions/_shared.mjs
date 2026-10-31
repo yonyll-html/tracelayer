@@ -1,5 +1,5 @@
-
 import { Contract, JsonRpcProvider, Wallet } from "ethers";
+import { timingSafeEqual } from "node:crypto";
 
 export const CONTRACT_ADDRESS =
   process.env.TRACE_LAYER_CONTRACT_ADDRESS;
@@ -19,6 +19,38 @@ export const ALLOWED_STATUSES = new Set([
   "Processed",
   "Delivered"
 ]);
+
+const ORGANIZATION_CODE_ENV = {
+  "tracknyll-demo": "TRACKNYLL_CODE_TRACKNYLL_DEMO",
+  "farm-a": "TRACKNYLL_CODE_FARM_A",
+  "warehouse-b": "TRACKNYLL_CODE_WAREHOUSE_B"
+};
+
+export function getOrganizationForCode(code) {
+  if (typeof code !== "string" || !code) return null;
+
+  for (const [organizationId, envName] of Object.entries(ORGANIZATION_CODE_ENV)) {
+    const expectedCode = process.env[envName];
+
+    if (!expectedCode) continue;
+
+    const submitted = Buffer.from(code);
+    const expected = Buffer.from(expectedCode);
+
+    if (
+      submitted.length === expected.length &&
+      timingSafeEqual(submitted, expected)
+    ) {
+      return organizationId;
+    }
+  }
+
+  return null;
+}
+
+export function isAllowedOrganization(organizationId) {
+  return Object.hasOwn(ORGANIZATION_CODE_ENV, organizationId);
+}
 
 const rateLimits = new Map();
 const WINDOW_MS = 60_000;
@@ -79,22 +111,31 @@ export function checkRateLimit(ip) {
 
 export async function parseBody(request) {
   const contentType = request.headers.get("content-type") || "";
+  const mediaType = contentType.split(";")[0].trim().toLowerCase();
 
-  if (!contentType.includes("application/json")) {
+  if (mediaType !== "application/json") {
     throw new Error("Send the request as application/json.");
   }
 
   const raw = await request.text();
 
-  if (raw.length > 4096) {
+  if (new TextEncoder().encode(raw).length > 4096) {
     throw new Error("Request body is too large.");
   }
 
+  let body;
+
   try {
-    return JSON.parse(raw);
+    body = JSON.parse(raw);
   } catch {
     throw new Error("Invalid JSON request body.");
   }
+
+  if (body === null || typeof body !== "object" || Array.isArray(body)) {
+    throw new Error("Request body must be a JSON object.");
+  }
+
+  return body;
 }
 
 export async function getWriteContract() {

@@ -189,7 +189,8 @@ transferForm.addEventListener("submit", async (event) => {
       batchId: data.get("transferBatchId").trim(),
       destination: data.get("destination").trim(),
       status: data.get("transferStatus"),
-      newCustodian: data.get("newCustodian").trim()
+      newCustodian: data.get("newCustodian").trim(),
+      organizationCode: data.get("organizationCode").trim()
     };
 
     showNotice("Submitting custody handoff through the shared wallet…");
