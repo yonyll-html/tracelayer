@@ -79,22 +79,31 @@ export function checkRateLimit(ip) {
 
 export async function parseBody(request) {
   const contentType = request.headers.get("content-type") || "";
+  const mediaType = contentType.split(";")[0].trim().toLowerCase();
 
-  if (!contentType.includes("application/json")) {
+  if (mediaType !== "application/json") {
     throw new Error("Send the request as application/json.");
   }
 
   const raw = await request.text();
 
-  if (raw.length > 4096) {
+  if (new TextEncoder().encode(raw).length > 4096) {
     throw new Error("Request body is too large.");
   }
 
+  let body;
+
   try {
-    return JSON.parse(raw);
+    body = JSON.parse(raw);
   } catch {
     throw new Error("Invalid JSON request body.");
   }
+
+  if (body === null || typeof body !== "object" || Array.isArray(body)) {
+    throw new Error("Request body must be a JSON object.");
+  }
+
+  return body;
 }
 
 export async function getWriteContract() {
